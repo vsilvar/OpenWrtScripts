@@ -11,6 +11,7 @@
 # Thanks, too, to hnyman for important comments on this script
 #
 # Version history
+#    0.2.3 - only list user installed packages if not verbose
 #    0.2.2 - editorial tweaks to help text -richb-hanvover 
 #    0.2.1 - fixed typo in awk script for dependency detection
 #    0.2.0 - command interface
@@ -129,9 +130,38 @@ fi
 if [ $COMMAND = "write" ] ; then
     if $VERBOSE; then
         echo "Saving package list to $PCKGLIST"
+
+        # List all installed packages
+        # NOTE: option --noaction not valid for list-installed
+        opkg list-installed > "$PCKGLIST"
+    else
+        # Only list user installed packages
+        FLASH_TIME="$(awk '
+        $1 == "Installed-Time:" && ($2 < OLDEST || OLDEST=="") {
+            OLDEST=$2
+        }
+        END {
+            print OLDEST
+        }
+        ' /usr/lib/opkg/status)"
+
+        awk -v FT="$FLASH_TIME" '
+        $1 == "Package:" {
+            PKG=$2
+            VER=""
+            USR=""
+        }
+        $1 == "Version:" {
+            VER=$2
+        }
+        $1 == "Status:" && $3 ~ "user" {
+            USR=1
+        }
+        $1 == "Installed-Time:" && USR && $2 != FT {
+            printf "%s - %s\n", PKG, VER
+        }
+        ' /usr/lib/opkg/status | sort > "$PCKGLIST"
     fi
-    # NOTE: option --noaction not valid for list-installed
-    opkg list-installed > "$PCKGLIST"
     exit 0
 fi
 
